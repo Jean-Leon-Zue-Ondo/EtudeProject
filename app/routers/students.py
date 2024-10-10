@@ -56,6 +56,8 @@ async def get_student(student_id: str):
         "project_ids": [str(pid) for pid in student.get("project_ids", []) if isinstance(pid, ObjectId)]
     }
 
+from bson import ObjectId
+
 # Route pour créer un nouvel étudiant
 @router.post("/", response_model=StudentResponse)
 async def create_student(student: StudentCreate, Authorize: AuthJWT = Depends()):
@@ -63,8 +65,22 @@ async def create_student(student: StudentCreate, Authorize: AuthJWT = Depends())
     Cette route permet de créer un nouvel étudiant. Elle est protégée par JWT.
     """
     Authorize.jwt_required()  # Vérifie que l'utilisateur est authentifié via JWT
-    student_data = student.dict()  # Convertir l'objet Pydantic en dictionnaire
-    created_student = await student_controller.create_student(student_data)  # Créer l'étudiant dans la base de données
+
+    # Convertir l'objet Pydantic en dictionnaire
+    student_data = student.dict()
+
+    # Vérifier que 'project_ids' est bien une liste de chaînes et convertir en ObjectId si nécessaire
+    if 'project_ids' in student_data and isinstance(student_data['project_ids'], list):
+        # Convertir les éléments de 'project_ids' en ObjectId si ce sont des chaînes
+        student_data['project_ids'] = [
+            ObjectId(pid) if isinstance(pid, str) and ObjectId.is_valid(pid) else pid
+            for pid in student_data['project_ids']
+        ]
+    else:
+        student_data['project_ids'] = []
+
+    # Créer l'étudiant dans la base de données
+    created_student = await student_controller.create_student(student_data)
 
     # Retourner les informations de l'étudiant créé
     return {
@@ -76,6 +92,7 @@ async def create_student(student: StudentCreate, Authorize: AuthJWT = Depends())
         # Convertir 'project_ids' en liste de chaînes si ce n'est pas déjà le cas
         "project_ids": [str(pid) for pid in created_student.get("project_ids", []) if isinstance(pid, ObjectId)]
     }
+
 
 # Route pour mettre à jour un étudiant
 @router.put("/{student_id}", response_model=StudentResponse)
